@@ -1,0 +1,65 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: karpay_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: karpay
+      POSTGRES_USER: karpay
+      POSTGRES_PASSWORD: karpay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karpay -d karpay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - karpay-network
+
+  karpay-ap:
+    build:
+      context: ../karpay-ap
+      dockerfile: Dockerfile
+    container_name: karpay_ap
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/karpay
+      SPRING_DATASOURCE_USERNAME: karpay
+      SPRING_DATASOURCE_PASSWORD: karpay
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - karpay-network
+
+  ach-simulator:
+    build:
+      context: ../ach-simulator
+      dockerfile: Dockerfile
+    container_name: ach_simulator
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      KARPAY_WEBHOOK_URL: http://karpay-ap:8080
+    depends_on:
+      - karpay-ap
+    networks:
+      - karpay-network
+
+networks:
+  karpay-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
